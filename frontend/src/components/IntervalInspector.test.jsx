@@ -183,7 +183,8 @@ describe('IntervalInspector', () => {
         ftp={200}
       />
     );
-    expect(screen.getByText(/150W/)).toBeInTheDocument();
+    const summary = screen.getByText(/FTP =/).closest('.inspector-summary');
+    expect(summary).toHaveTextContent(/150W/);
   });
 
   it('displays ramp summary with arrow', () => {
@@ -195,9 +196,9 @@ describe('IntervalInspector', () => {
         ftp={200}
       />
     );
-    // Should show start and end watts
-    expect(screen.getByText(/100W/)).toBeInTheDocument();
-    expect(screen.getByText(/200W/)).toBeInTheDocument();
+    const summary = screen.getByText(/→/).closest('.inspector-summary');
+    expect(summary).toHaveTextContent(/100W/);
+    expect(summary).toHaveTextContent(/200W/);
   });
 
   it('syncs power_end with power_start for rest type change', () => {

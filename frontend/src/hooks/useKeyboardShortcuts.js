@@ -22,7 +22,7 @@ export function useKeyboardShortcuts({
   useEffect(() => {
     function handleKeyDown(e) {
       // Ignore events from input/textarea/select elements
-      const tag = e.target.tagName.toLowerCase();
+      const tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') {
         return;
       }
