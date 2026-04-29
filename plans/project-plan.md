@@ -7,6 +7,9 @@
 | 1     | Foundation + Editor         | Project scaffolding, auth, basic workout editor, user profile  | R1, R2, R4, R9, R11, NF1–4 |
 | 2     | Export, Import, and Catalog | Workout library with search/tags, export, import               | R3, R5, R6, R8             |
 | 3     | Template Library            | Built-in workout templates, template browser drawer            | R7                         |
+| 4     | Training Plans              | Multi-week plan builder, calendar view, plan management        | R10                        |
+| 5     | Train My Commute            | Commute profiles, plan-to-commute adaptation engine            | R12                        |
+| 6     | Platform Integrations       | Strava/Garmin ingest, Garmin workout push, Wahoo/others        | R13                        |
 
 Each phase produces a deployable, self-hosted system. Later phases build on earlier ones without reworking prior deliverables.
 
@@ -339,3 +342,183 @@ Each phase produces a deployable, self-hosted system. Later phases build on earl
   - `DATABASE_PATH`
   - `FRONTEND_URL` (for CORS and OAuth redirect)
 - `.env.example` file in the repo.
+
+---
+
+## Phase 4 — Training Plans
+
+**Goal**: Users can organize workouts into multi-day/multi-week training plans and view them on a calendar. This phase lays the groundwork for the "Train My Commute" feature.
+
+### 4.1 — Training Plan Data Model
+
+- [ ] Create `training_plans` table migration:
+  ```sql
+  CREATE TABLE training_plans (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    start_date DATE NOT NULL,
+    weeks INTEGER NOT NULL DEFAULT 4,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE plan_entries (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
+    workout_id TEXT REFERENCES workouts(id),
+    day_offset INTEGER NOT NULL,  -- day within the plan (0-based)
+    notes TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  ```
+- [ ] Repository/DAO layer for plans and entries.
+
+### 4.2 — Training Plan API
+
+- [ ] `POST /api/plans` — create a new plan.
+- [ ] `GET /api/plans` — list user's plans.
+- [ ] `GET /api/plans/{id}` — get plan with all entries.
+- [ ] `PUT /api/plans/{id}` — update plan metadata.
+- [ ] `DELETE /api/plans/{id}` — delete plan.
+- [ ] `POST /api/plans/{id}/entries` — add a workout to a day.
+- [ ] `PUT /api/plans/{id}/entries/{entryId}` — move/update an entry.
+- [ ] `DELETE /api/plans/{id}/entries/{entryId}` — remove an entry.
+
+### 4.3 — Calendar View (Frontend)
+
+- [ ] Calendar UI showing the plan's date range with workouts placed on days.
+- [ ] Drag-and-drop workouts from the library onto calendar days.
+- [ ] Drag to move workouts between days within the plan.
+- [ ] Per-day view: click a day to see the scheduled workout(s) with chart preview.
+- [ ] Week summary row: total planned duration, TSS, and intensity distribution.
+
+### Phase 4 — Exit Criteria
+
+- [ ] User can create, edit, and delete training plans.
+- [ ] User can assign workouts to specific days on a calendar view.
+- [ ] Calendar displays workout chart thumbnails and weekly summaries.
+- [ ] Drag-and-drop scheduling works for adding and rearranging workouts.
+
+---
+
+## Phase 5 — Train My Commute
+
+**Goal**: Transform training plans into commute-aware schedules. The system adapts structured plans to fit around a rider's daily commute, making the commute ride the primary training vehicle.
+
+### 5.1 — Commute Profile
+
+- [ ] Create `commute_profiles` table migration:
+  ```sql
+  CREATE TABLE commute_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL DEFAULT 'My Commute',
+    direction TEXT NOT NULL,  -- 'to_work', 'from_work'
+    distance_km REAL,
+    typical_duration_min INTEGER NOT NULL,
+    elevation_gain_m REAL DEFAULT 0,
+    intensity_cap_pct INTEGER,          -- max %FTP (e.g., no showering constraint)
+    arrival_deadline TIME,              -- e.g., '08:30'
+    days_of_week TEXT NOT NULL,         -- JSON array, e.g., ["mon","tue","wed","thu","fri"]
+    notes TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  ```
+- [ ] Support asymmetric commutes: separate profiles for to-work and from-work directions.
+- [ ] API endpoints for CRUD on commute profiles.
+- [ ] Frontend: commute profile editor in the user profile area.
+
+### 5.2 — Plan Adaptation Engine
+
+- [ ] Adaptation algorithm that takes a training plan + commute profile(s) and produces a commute-aware schedule:
+  - Map plan workouts onto commute slots where the workout fits within commute duration and intensity constraints.
+  - Assign easy/recovery days to commute rides that stay under the intensity cap.
+  - Flag workouts that cannot fit a commute slot (too long, too intense, requires specific terrain) as requiring a dedicated ride.
+  - Distribute weekly volume across commute rides, accounting for the cumulative load that commuting adds on top of the plan.
+- [ ] Output: an adapted calendar where each day shows either a commute-adapted workout, a standalone workout, or a rest day.
+- [ ] Allow manual overrides — user can move a workout from commute to dedicated slot or vice versa.
+
+### 5.3 — Compliance Tracking
+
+- [ ] Weekly summary view comparing planned vs. actual:
+  - Which commute rides hit the prescribed targets.
+  - Remaining plan objectives that need dedicated rides.
+  - Cumulative TSS/volume vs. plan intent.
+- [ ] Visual indicators on the calendar: completed (green), missed (red), upcoming (blue), adapted-for-commute (commute icon).
+
+### Phase 5 — Exit Criteria
+
+- [ ] User can define asymmetric commute profiles with constraints.
+- [ ] The adaptation engine produces a commute-aware schedule from a training plan.
+- [ ] Calendar view distinguishes commute workouts from dedicated sessions.
+- [ ] Weekly compliance summaries show planned vs. actual training load.
+
+---
+
+## Phase 6 — Platform Integrations
+
+**Goal**: Close the feedback loop between planned and actual training by pulling ride data from Strava/Garmin and pushing scheduled workouts to head units.
+
+### 6.1 — OAuth & Connection Management
+
+- [ ] Implement OAuth 2.0 flows for:
+  - **Strava API** — read activity data.
+  - **Garmin Connect API** — read activity data + write workouts.
+- [ ] Token storage (encrypted), refresh, and revocation handling.
+- [ ] Frontend: "Connected Accounts" section in user profile with connect/disconnect buttons and status indicators.
+- [ ] Environment variables for client IDs/secrets: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET`.
+
+### 6.2 — Inbound: Ride Data Collection
+
+- [ ] **Strava integration**:
+  - Register a Strava webhook to receive new activity notifications.
+  - On notification, fetch activity details (power, HR, duration, route, TSS/IF).
+  - Store activity summaries in a local `activities` table linked to the user.
+- [ ] **Garmin Connect integration**:
+  - Use Garmin's push API (Health API / activity file push) to receive completed activities.
+  - Parse activity data and store alongside Strava activities.
+- [ ] **Auto-classification**:
+  - Classify imported rides as "commute", "dedicated training", or "other" based on:
+    - Route matching against commute profile (start/end location proximity).
+    - Time-of-day correlation with commute schedule.
+    - User-defined rules and manual override.
+- [ ] **Plan compliance assessment**:
+  - Compare actual ride metrics against the day's prescribed workout.
+  - Update the compliance tracking view (Phase 5.3) with real data.
+
+### 6.3 — Outbound: Publish Workouts to Head Units
+
+- [ ] **Garmin Connect workout push**:
+  - Push scheduled workouts to Garmin Connect so they appear on the rider's device.
+  - Support both commute-adapted workouts and standalone training sessions.
+  - Map internal interval model to Garmin workout format (FIT workout file or Connect API workout structure).
+- [ ] **Calendar sync**:
+  - Automatically push upcoming workouts (e.g., next 7 days) to Garmin Connect's training calendar.
+  - Handle updates — if the user reschedules a workout, update or replace the Garmin entry.
+- [ ] Frontend:
+  - Per-workout "Send to Garmin" button.
+  - Auto-sync toggle in settings: push upcoming workouts automatically.
+  - Sync status indicators on calendar entries.
+
+### 6.4 — Future: Additional Head Unit Platforms
+
+- [ ] Design the integration layer with a **provider abstraction** so new platforms are additive:
+  - Common interface: `PullActivities()`, `PushWorkout()`, `SyncCalendar()`.
+  - Per-provider implementation behind the interface.
+- [ ] Planned future providers (not implemented in Phase 6, but architecture supports them):
+  - **Wahoo (ELEMNT)** — via Wahoo Cloud API.
+  - **Hammerhead (Karoo)** — via Karoo's open platform.
+  - **Bryton** and **Stages** — as APIs become available.
+
+### Phase 6 — Exit Criteria
+
+- [ ] User can connect Strava and/or Garmin accounts via OAuth.
+- [ ] Completed rides are automatically pulled from Strava (webhook) and Garmin (push API).
+- [ ] Imported rides are auto-classified as commute/training/other.
+- [ ] Plan compliance view reflects actual ride data.
+- [ ] User can push workouts to Garmin Connect; workouts appear on the Garmin device.
+- [ ] Auto-sync pushes upcoming workouts to Garmin's training calendar.
+- [ ] Integration layer is abstracted for future Wahoo/Hammerhead/Bryton/Stages support.

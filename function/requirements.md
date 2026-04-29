@@ -94,6 +94,51 @@ A web-based application for creating, managing, and exporting structured cycling
 - The system will eventually support organizing workouts into multi-day/multi-week training plans with a calendar view.
 - This is out of scope for the initial release but should be considered in data model and architecture decisions.
 
+## R12 — "Train My Commute" (Future Vision)
+
+Over time, evolve this application into a **"Train My Commute"** platform. The core idea: many cyclists get a significant portion of their weekly volume from a daily bike commute. Traditional training plans assume all ride time is discretionary, but commute riders have fixed ride slots (to/from work) with real-world constraints — fixed route, traffic, time pressure, weather.
+
+**Concept:**
+
+- Users import or define a **structured training plan** (e.g., a base-build-peak plan, polarized block, sweet spot progression).
+- Users describe their **commute profile**: distance, typical duration, elevation, frequency (days/week), and any constraints (e.g., "must arrive by 8:30 AM", "no showering at work so cap intensity").
+- The system **adapts the training plan to overlay onto commute rides** — turning commute segments into interval sessions where appropriate, scheduling recovery commutes on easy days, and identifying which plan workouts genuinely need a separate dedicated ride.
+- The plan accounts for **cumulative fatigue** from commuting volume that traditional plans wouldn't include.
+- Weekly summaries show how commute rides satisfy plan objectives vs. what remains for dedicated training sessions.
+
+**Key design considerations for R12:**
+
+- The commute ride is the atomic building block, not just another calendar slot.
+- Plan adaptation should respect real-world commute constraints (arrival time, intensity caps, gear/logistics).
+- Support for asymmetric commutes (e.g., hillier one direction, different times of day).
+- Integration with R5/R6 exports so adapted commute workouts can be pushed to head units.
+
+## R13 — Platform Integrations (Future — supports R12)
+
+To close the loop between planned training and actual riding, the system needs bidirectional integration with fitness platforms.
+
+**Inbound — Ride Data Collection:**
+
+- **Strava API**: Pull completed ride activities (power, HR, duration, route, TSS/IF) to track what the rider actually did — especially commute rides.
+- **Garmin Connect API**: Pull ride data from Garmin devices as an alternative or complement to Strava.
+- Automatic classification of imported rides as "commute", "dedicated training", or "other" based on route matching, time-of-day, and user-defined rules.
+- Use actual ride data to assess plan compliance — did the commute ride hit the prescribed intervals? How does cumulative load compare to the plan's intent?
+
+**Outbound — Publish Training Activities:**
+
+- **Garmin Connect API**: Push scheduled workouts directly to the user's Garmin device via Garmin Connect. The rider sees the day's prescribed workout (with target power zones and intervals) on their head unit before rolling out.
+- Support pushing both commute-adapted workouts and standalone training sessions.
+- Sync the training calendar so upcoming workouts appear on the Garmin device automatically.
+
+**Key design considerations for R13:**
+
+- OAuth 2.0 flows for both Strava and Garmin Connect, with token refresh and revocation handling.
+- Polling/webhook strategy for ingesting new activities (Strava supports webhooks; Garmin Connect uses push via its API).
+- Rate limiting and data caching to stay within API quotas.
+- Privacy: users control which activities are imported and what data is retained.
+- Graceful degradation when a platform connection is unavailable or revoked.
+- **Future expansion**: extend platform support beyond Garmin to other popular cycling head units and ecosystems, including **Wahoo (ELEMNT series)**, **Hammerhead (Karoo)**, **Bryton**, and **Stages**. Each platform has its own API, workout format, and sync mechanism — the integration layer should be designed with a provider abstraction so adding new platforms is incremental rather than architectural. Wahoo's cloud API and Hammerhead's open Karoo platform are natural next targets after Garmin.
+
 ---
 
 ## Non-Functional Requirements
